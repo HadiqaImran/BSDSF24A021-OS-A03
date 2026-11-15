@@ -84,6 +84,12 @@ int handle_builtin(char** arglist)
         printf("  exit      - exit the shell\n");
         printf("  help      - show this message\n");
         printf("  jobs      - list background jobs (not yet implemented)\n");
+        printf("  history   - show command history (use !n to re-run)\n");
+        return 1;
+    }
+
+    if (strcmp(arglist[0], "history") == 0) {
+        print_history();
         return 1;
     }
 
@@ -93,4 +99,33 @@ int handle_builtin(char** arglist)
     }
 
     return 0;
+}
+
+static char* history[HISTORY_SIZE];
+static int history_count = 0;
+
+void add_to_history(const char* cmdline)
+{
+    if (cmdline == NULL || cmdline[0] == '\0')
+        return;
+    if (history_count == HISTORY_SIZE) {      /* full: drop the oldest */
+        free(history[0]);
+        for (int i = 1; i < HISTORY_SIZE; i++)
+            history[i - 1] = history[i];
+        history_count--;
+    }
+    history[history_count++] = strdup(cmdline);
+}
+
+void print_history(void)
+{
+    for (int i = 0; i < history_count; i++)
+        printf("%d  %s\n", i + 1, history[i]);
+}
+
+char* get_history(int n)
+{
+    if (n < 1 || n > history_count)
+        return NULL;
+    return history[n - 1];
 }

@@ -5,6 +5,23 @@ int main() {
     char** arglist;
 
     while ((cmdline = read_cmd(PROMPT, stdin)) != NULL) {
+
+        /* !n : replace the line with the n-th history command */
+        if (cmdline[0] == '!') {
+            char* old = get_history(atoi(cmdline + 1));
+            if (old == NULL) {
+                fprintf(stderr, "history: no such command\n");
+                free(cmdline);
+                continue;
+            }
+            char* replaced = strdup(old);
+            printf("%s\n", replaced);
+            free(cmdline);
+            cmdline = replaced;
+        }
+
+        add_to_history(cmdline);
+
         if ((arglist = tokenize(cmdline)) != NULL) {
             if (handle_builtin(arglist) == 0)
                 execute(arglist);
