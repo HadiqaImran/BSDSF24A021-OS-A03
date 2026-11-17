@@ -28,42 +28,58 @@ char** tokenize(char* cmdline) {
     char** arglist = (char**)malloc(sizeof(char*) * (MAXARGS + 1));
     for (int i = 0; i < MAXARGS + 1; i++) {
         arglist[i] = (char*)malloc(sizeof(char) * ARGLEN);
-        bzero(arglist[i], ARGLEN);
+        memset(arglist[i], 0, ARGLEN);
     }
 
     char* cp = cmdline;
-    char* start;
-    int len;
     int argnum = 0;
 
     while (*cp != '\0' && argnum < MAXARGS) {
         while (*cp == ' ' || *cp == '\t') cp++; // Skip leading whitespace
-        
+
         if (*cp == '\0') break; // Line was only whitespace
 
-        start = cp;
-        len = 1;
-        while (*++cp != '\0' && !(*cp == ' ' || *cp == '\t')) {
-            len++;
+        int len = 0;
+        int in_quotes = 0;
+        while (*cp != '\0' && (in_quotes || (*cp != ' ' && *cp != '\t'))) {
+            if (*cp == '"') {
+                in_quotes = !in_quotes;      /* quotes group words, they are not kept */
+            } else if (len < ARGLEN - 1) {
+                arglist[argnum][len++] = *cp;
+            }
+            cp++;
         }
-        strncpy(arglist[argnum], start, len);
         arglist[argnum][len] = '\0';
         argnum++;
     }
 
     if (argnum == 0) { // No arguments were parsed
-        for(int i = 0; i < MAXARGS + 1; i++) free(arglist[i]);
+        for (int i = 0; i < MAXARGS + 1; i++) free(arglist[i]);
         free(arglist);
         return NULL;
     }
 
+    for (int i = argnum; i < MAXARGS + 1; i++)   // free the unused buffers
+        free(arglist[i]);
     arglist[argnum] = NULL;
     return arglist;
 }
+
 int handle_builtin(char** arglist)
 {
     if (arglist == NULL || arglist[0] == NULL)
         return 0;
+
+    if (is_assignment(arglist[0])) {
+        if (arglist[1] != NULL) {
+            fprintf(stderr, "syntax error: put values with spaces in quotes, e.g. NAME=\"a b\"\n");
+            return 1;
+        }
+        char* eq = strchr(arglist[0], '=');
+        *eq = '\0';
+        set_var(arglist[0], eq + 1);
+        return 1;
+    }
 
     if (strcmp(arglist[0], "exit") == 0) {
         printf("Exiting shell...\n");
@@ -85,11 +101,17 @@ int handle_builtin(char** arglist)
         printf("  help      - show this message\n");
         printf("  jobs      - list running background jobs\n");
         printf("  history   - show command history (use !n to re-run)\n");
+        printf("  set       - show all shell variables (assign with NAME=value)\n");
         return 1;
     }
 
     if (strcmp(arglist[0], "history") == 0) {
         print_history();
+        return 1;
+    }
+
+    if (strcmp(arglist[0], "set") == 0) {
+        print_vars();
         return 1;
     }
 
@@ -177,4 +199,72 @@ void print_jobs(void)
     }
     for (int i = 0; i < job_count; i++)
         printf("[%d] pid %d  %s\n", i + 1, jobs_pid[i], jobs_text[i]);
+}
+
+/* ---------- shell variables (linked list) ---------- */
+typedef struct var {
+    char* name;
+    char* value;
+    struct var* next;
+} var_t;
+
+static var_t* var_head = NULL;
+
+/* "NAME=..." where NAME is letters, digits or '_' and does not start with a digit */
+int is_assignment(const char* s)
+{
+    if (s == NULL || !(isalpha((unsigned char)s[0]) || s[0] == '_'))
+        return 0;
+    int i = 0;
+    while (isalnum((unsigned char)s[i]) || s[i] == '_')
+        i++;
+    return s[i] == '=';
+}
+
+void set_var(const char* name, const char* value)
+{
+    var_t* last = NULL;
+    for (var_t* v = var_head; v != NULL; v = v->next) {
+        if (strcmp(v->name, name) == 0) {      /* already exists: update */
+            free(v->value);
+            v->value = strdup(value);
+            return;
+        }
+        last = v;
+    }
+    var_t* v = (var_t*) malloc(sizeof(var_t));  /* new node at the end */
+    v->name = strdup(name);
+    v->value = strdup(value);
+    v->next = NULL;
+    if (last == NULL)
+        var_head = v;
+    else
+        last->next = v;
+}
+
+const char* get_var(const char* name)
+{
+    for (var_t* v = var_head; v != NULL; v = v->next)
+        if (strcmp(v->name, name) == 0)
+            return v->value;
+    return NULL;
+}
+
+void print_vars(void)
+{
+    for (var_t* v = var_head; v != NULL; v = v->next)
+        printf("%s=%s\n", v->name, v->value);
+}
+
+/* Replace every argument of the form $NAME with a fresh copy of its value. */
+void expand_variables(char** arglist)
+{
+    for (int i = 0; arglist[i] != NULL; i++) {
+        if (arglist[i][0] == '$' && arglist[i][1] != '\0') {
+            const char* value = get_var(arglist[i] + 1);
+            char* expanded = strdup(value != NULL ? value : "");
+            free(arglist[i]);
+            arglist[i] = expanded;
+        }
+    }
 }

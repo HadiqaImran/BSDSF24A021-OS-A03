@@ -35,6 +35,8 @@ static int run_command(char* cmd)
     if (arglist == NULL)
         return 0;
 
+    expand_variables(arglist);          /* replace $NAME with its value */
+
     int status = 0;
     if (handle_builtin(arglist) == 0)
         status = execute(arglist, background);

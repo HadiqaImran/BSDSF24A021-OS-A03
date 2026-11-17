@@ -8,10 +8,11 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <ctype.h>
 
 #define MAX_LEN 512
 #define MAXARGS 10
-#define ARGLEN 30
+#define ARGLEN 256
 #define PROMPT "FCIT> "
 #define HISTORY_SIZE 20
 #define MAX_JOBS 20
@@ -23,6 +24,11 @@ int execute(char** arglist, int background);
 void add_job(int pid, const char* name);
 void reap_jobs(void);
 void print_jobs(void);
+int is_assignment(const char* s);
+void set_var(const char* name, const char* value);
+const char* get_var(const char* name);
+void print_vars(void);
+void expand_variables(char** arglist);
 int handle_builtin(char** arglist);
 void add_to_history(const char* cmdline);
 void print_history(void);
