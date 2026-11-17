@@ -87,9 +87,12 @@ int handle_builtin(char** arglist)
     }
 
     if (strcmp(arglist[0], "cd") == 0) {
-        if (arglist[1] == NULL)
-            fprintf(stderr, "cd: missing directory\n");
-        else if (chdir(arglist[1]) != 0)
+        const char* target = arglist[1];
+        if (target == NULL)
+            target = getenv("HOME");           /* plain "cd" goes home */
+        if (target == NULL)
+            fprintf(stderr, "cd: HOME not set\n");
+        else if (chdir(target) != 0)
             perror("cd");
         return 1;
     }
