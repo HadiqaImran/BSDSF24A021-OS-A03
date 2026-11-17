@@ -61,10 +61,18 @@ static void child_exec(char** tokens)
     exit(1);
 }
 
-int execute(char** arglist)
+int execute(char** arglist, int background)
 {
     int status;
     int pipe_at = -1;
+
+    /* text shown by the jobs command */
+    char job_text[128] = "";
+    for (int i = 0; arglist[i] != NULL; i++) {
+        if (i > 0)
+            strncat(job_text, " ", sizeof(job_text) - strlen(job_text) - 1);
+        strncat(job_text, arglist[i], sizeof(job_text) - strlen(job_text) - 1);
+    }
 
     for (int i = 0; arglist[i] != NULL; i++) {
         if (strcmp(arglist[i], "|") == 0) {
@@ -82,7 +90,12 @@ int execute(char** arglist)
         }
         if (cpid == 0)
             child_exec(arglist);
-        waitpid(cpid, &status, 0);
+        if (background) {
+            add_job(cpid, job_text);
+            printf("[bg] pid %d\n", cpid);
+        } else {
+            waitpid(cpid, &status, 0);
+        }
         return 0;
     }
 
@@ -141,6 +154,11 @@ int execute(char** arglist)
 
     close(pfd[0]);                            /* parent closes both ends */
     close(pfd[1]);
+    if (background) {
+        add_job(pid2, job_text);
+        printf("[bg] pid %d\n", pid2);
+        return 0;
+    }
     waitpid(pid1, &status, 0);
     waitpid(pid2, &status, 0);
     return 0;

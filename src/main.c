@@ -2,13 +2,43 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+/* Run ONE command (no ';' inside). A trailing '&' means background. */
+static void run_command(char* cmd)
+{
+    int len = strlen(cmd);
+    while (len > 0 && (cmd[len - 1] == ' ' || cmd[len - 1] == '\t'))
+        cmd[--len] = '\0';
+
+    int background = 0;
+    if (len > 0 && cmd[len - 1] == '&') {
+        background = 1;
+        cmd[--len] = '\0';
+    }
+
+    char** arglist = tokenize(cmd);
+    if (arglist == NULL)
+        return;
+
+    if (handle_builtin(arglist) == 0)
+        execute(arglist, background);
+
+    // Free the memory allocated by tokenize()
+    for (int i = 0; arglist[i] != NULL; i++) {
+        free(arglist[i]);
+    }
+    free(arglist);
+}
+
 int main() {
     char* cmdline;
-    char** arglist;
 
-    while ((cmdline = readline(PROMPT)) != NULL) {
+    while (1) {
+        reap_jobs();                       /* collect finished background jobs */
 
-        /* skip empty lines */
+        cmdline = readline(PROMPT);
+        if (cmdline == NULL)
+            break;
+
         if (cmdline[0] == '\0') {
             free(cmdline);
             continue;
@@ -31,16 +61,16 @@ int main() {
         add_history(cmdline);        /* readline's history (arrow keys) */
         add_to_history(cmdline);     /* our own history (history, !n)   */
 
-        if ((arglist = tokenize(cmdline)) != NULL) {
-            if (handle_builtin(arglist) == 0)
-                execute(arglist);
-
-            // Free the memory allocated by tokenize()
-            for (int i = 0; arglist[i] != NULL; i++) {
-                free(arglist[i]);
-            }
-            free(arglist);
+        /* split the line at each ';' and run the pieces one after another */
+        char* rest = cmdline;
+        while (rest != NULL) {
+            char* semi = strchr(rest, ';');
+            if (semi != NULL)
+                *semi = '\0';
+            run_command(rest);
+            rest = (semi != NULL) ? semi + 1 : NULL;
         }
+
         free(cmdline);
     }
 
