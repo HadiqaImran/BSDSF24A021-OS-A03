@@ -86,7 +86,7 @@ int execute(char** arglist, int background)
         int cpid = fork();
         if (cpid == -1) {
             perror("fork failed");
-            return -1;
+            return 1;
         }
         if (cpid == 0)
             child_exec(arglist);
@@ -95,6 +95,7 @@ int execute(char** arglist, int background)
             printf("[bg] pid %d\n", cpid);
         } else {
             waitpid(cpid, &status, 0);
+            return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
         }
         return 0;
     }
@@ -108,19 +109,19 @@ int execute(char** arglist, int background)
 
     if (pipe_at == 0 || right[0] == NULL) {
         fprintf(stderr, "syntax error: missing command around |\n");
-        return -1;
+        return 1;
     }
     for (int i = 0; right[i] != NULL; i++) {
         if (strcmp(right[i], "|") == 0) {
             fprintf(stderr, "only one pipe is supported\n");
-            return -1;
+            return 1;
         }
     }
 
     int pfd[2];
     if (pipe(pfd) == -1) {
         perror("pipe");
-        return -1;
+        return 1;
     }
 
     int pid1 = fork();
@@ -128,7 +129,7 @@ int execute(char** arglist, int background)
         perror("fork failed");
         close(pfd[0]);
         close(pfd[1]);
-        return -1;
+        return 1;
     }
     if (pid1 == 0) {                          /* left child: writer */
         dup2(pfd[1], STDOUT_FILENO);
@@ -143,7 +144,7 @@ int execute(char** arglist, int background)
         close(pfd[0]);
         close(pfd[1]);
         waitpid(pid1, &status, 0);
-        return -1;
+        return 1;
     }
     if (pid2 == 0) {                          /* right child: reader */
         dup2(pfd[0], STDIN_FILENO);
@@ -161,5 +162,5 @@ int execute(char** arglist, int background)
     }
     waitpid(pid1, &status, 0);
     waitpid(pid2, &status, 0);
-    return 0;
+    return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
 }
